@@ -1,58 +1,69 @@
-import { useState, useEffect } from 'react';
-import { useGoals } from '@/hooks/useGoals';
+import { useState } from 'react';
+import { useGoals, Goal } from '@/hooks/useGoals';
 import { useRoadmaps } from '@/hooks/useRoadmaps';
 import { GoalCard } from '@/components/goals/GoalCard';
 import { GoalForm } from '@/components/goals/GoalForm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Goal } from '@/types';
-import { Plus, Search, Target } from 'lucide-react';
+import { Plus, Search, Target, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Goals() {
   const { goals, addGoal, updateGoal, deleteGoal, updateStatus } = useGoals();
-  const { roadmaps, createRoadmap, updateRoadmap, generateMermaidFromGoals } = useRoadmaps();
+  const { createRoadmap, generateAIRoadmap } = useRoadmaps();
   const [formOpen, setFormOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
   const [search, setSearch] = useState('');
+  const [generatingRoadmap, setGeneratingRoadmap] = useState(false);
 
   const filteredGoals = goals.filter(g =>
     g.title.toLowerCase().includes(search.toLowerCase()) ||
     g.description.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Auto-update roadmap when goals change
-  useEffect(() => {
-    if (goals.length > 0 && roadmaps.length > 0) {
-      const mainRoadmap = roadmaps.find(r => r.title === 'My Learning Journey');
-      if (mainRoadmap) {
-        const newMermaidCode = generateMermaidFromGoals(goals, 'My Learning Journey');
-        if (mainRoadmap.mermaidCode !== newMermaidCode) {
-          updateRoadmap(mainRoadmap.id, {
-            mermaidCode: newMermaidCode,
-            goalIds: goals.map(g => g.id),
-          });
-        }
-      }
-    }
-  }, [goals, roadmaps, generateMermaidFromGoals, updateRoadmap]);
-
   const handleSubmit = async (data: Omit<Goal, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
     if (editingGoal) {
       await updateGoal(editingGoal.id, data);
+      toast.success('Goal updated!');
     } else {
-      const newGoal = await addGoal(data);
-      
-      // Auto-create roadmap on first goal
-      if (goals.length === 0 && newGoal) {
-        await createRoadmap(
-          'My Learning Journey',
-          'Your personalized learning roadmap based on your goals',
-          [newGoal]
-        );
-        toast.success('🗺️ Your roadmap has been created!', {
-          description: 'Check the Roadmaps page to see your learning journey',
-        });
+      try {
+        setGeneratingRoadmap(true);
+        const newGoal = await addGoal(data);
+        
+        if (newGoal) {
+          toast.success('Goal created!', {
+            description: 'Generating your personalized roadmap...',
+          });
+
+          // Generate AI roadmap for the new goal
+          const roadmapData = await generateAIRoadmap(
+            newGoal.title,
+            newGoal.description,
+            newGoal.deadline
+          );
+
+          // Create the roadmap in the database
+          const roadmap = await createRoadmap(
+            roadmapData.title,
+            roadmapData.description,
+            [newGoal.id],
+            roadmapData.mermaidCode
+          );
+
+          if (roadmap) {
+            // Link the goal to the roadmap
+            await updateGoal(newGoal.id, { roadmapId: roadmap.id });
+            
+            toast.success('🗺️ Roadmap generated!', {
+              description: 'Check the Roadmaps page to see your learning journey',
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error creating goal/roadmap:', error);
+        toast.error('Goal created but roadmap generation failed');
+      } finally {
+        setGeneratingRoadmap(false);
       }
     }
     setEditingGoal(null);
@@ -70,9 +81,21 @@ export default function Goals() {
           <h1 className="text-3xl font-bold">Goals</h1>
           <p className="text-muted-foreground">Manage your learning goals</p>
         </div>
-        <Button onClick={() => { setEditingGoal(null); setFormOpen(true); }}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Goal
+        <Button 
+          onClick={() => { setEditingGoal(null); setFormOpen(true); }}
+          disabled={generatingRoadmap}
+        >
+          {generatingRoadmap ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Generating...
+            </>
+          ) : (
+            <>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Goal
+            </>
+          )}
         </Button>
       </div>
 
@@ -103,9 +126,9 @@ export default function Goals() {
           <Target className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
           <h3 className="text-lg font-semibold mb-2">No goals yet</h3>
           <p className="text-muted-foreground mb-4">
-            Start by adding your first learning goal
+            Start by adding your first learning goal - we'll create a personalized roadmap for you!
           </p>
-          <Button onClick={() => setFormOpen(true)}>
+          <Button onClick={() => setFormOpen(true)} disabled={generatingRoadmap}>
             <Plus className="w-4 h-4 mr-2" />
             Add Goal
           </Button>

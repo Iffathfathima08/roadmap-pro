@@ -1,8 +1,23 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { UserProfile } from '@/types';
+import { User, Session } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
+
+interface UserProfile {
+  id: string;
+  email: string;
+  displayName: string;
+  photoUrl?: string;
+  currentStreak: number;
+  longestStreak: number;
+  totalGoalsCompleted: number;
+  badges: string[];
+  lastActiveDate: string;
+  createdAt: string;
+}
 
 interface AuthContextType {
   user: UserProfile | null;
+  session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName: string) => Promise<void>;
@@ -12,81 +27,145 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock user storage (simulates Firebase)
-const STORAGE_KEY = 'roadmap_user';
-const USERS_KEY = 'roadmap_users';
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      setUser(JSON.parse(stored));
+  const fetchProfile = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error fetching profile:', error);
+      return null;
     }
-    setLoading(false);
+
+    if (data) {
+      return {
+        id: data.id,
+        email: data.email || '',
+        displayName: data.display_name || '',
+        photoUrl: data.photo_url || undefined,
+        currentStreak: data.current_streak || 0,
+        longestStreak: data.longest_streak || 0,
+        totalGoalsCompleted: data.total_goals_completed || 0,
+        badges: data.badges || [],
+        lastActiveDate: data.last_active_date || new Date().toISOString(),
+        createdAt: data.created_at || new Date().toISOString(),
+      };
+    }
+    return null;
+  };
+
+  useEffect(() => {
+    // Set up auth state listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setSession(session);
+        
+        if (session?.user) {
+          // Defer Supabase calls with setTimeout to prevent deadlock
+          setTimeout(() => {
+            fetchProfile(session.user.id).then(profile => {
+              setUser(profile);
+              setLoading(false);
+            });
+          }, 0);
+        } else {
+          setUser(null);
+          setLoading(false);
+        }
+      }
+    );
+
+    // THEN check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session?.user) {
+        fetchProfile(session.user.id).then(profile => {
+          setUser(profile);
+          setLoading(false);
+        });
+      } else {
+        setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const users = JSON.parse(localStorage.getItem(USERS_KEY) || '{}');
-    const userData = users[email];
-    
-    if (!userData || userData.password !== password) {
-      throw new Error('Invalid email or password');
-    }
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-    const profile: UserProfile = userData.profile;
-    setUser(profile);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+    if (error) {
+      throw new Error(error.message);
+    }
   };
 
   const signUp = async (email: string, password: string, displayName: string) => {
-    const users = JSON.parse(localStorage.getItem(USERS_KEY) || '{}');
+    const redirectUrl = `${window.location.origin}/`;
     
-    if (users[email]) {
-      throw new Error('Email already registered');
-    }
-
-    const profile: UserProfile = {
-      id: crypto.randomUUID(),
+    const { error } = await supabase.auth.signUp({
       email,
-      displayName,
-      currentStreak: 0,
-      longestStreak: 0,
-      totalGoalsCompleted: 0,
-      badges: [],
-      lastActiveDate: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-    };
+      password,
+      options: {
+        emailRedirectTo: redirectUrl,
+        data: {
+          display_name: displayName,
+        },
+      },
+    });
 
-    users[email] = { password, profile };
-    localStorage.setItem(USERS_KEY, JSON.stringify(users));
-    setUser(profile);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+    if (error) {
+      if (error.message.includes('already registered')) {
+        throw new Error('This email is already registered. Please sign in instead.');
+      }
+      throw new Error(error.message);
+    }
   };
 
   const signOut = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      throw new Error(error.message);
+    }
     setUser(null);
-    localStorage.removeItem(STORAGE_KEY);
+    setSession(null);
   };
 
   const updateProfile = async (updates: Partial<UserProfile>) => {
-    if (!user) return;
-    
-    const updatedProfile = { ...user, ...updates };
-    setUser(updatedProfile);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedProfile));
-    
-    const users = JSON.parse(localStorage.getItem(USERS_KEY) || '{}');
-    if (users[user.email]) {
-      users[user.email].profile = updatedProfile;
-      localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    if (!user || !session) return;
+
+    const dbUpdates: Record<string, unknown> = {};
+    if (updates.displayName !== undefined) dbUpdates.display_name = updates.displayName;
+    if (updates.photoUrl !== undefined) dbUpdates.photo_url = updates.photoUrl;
+    if (updates.currentStreak !== undefined) dbUpdates.current_streak = updates.currentStreak;
+    if (updates.longestStreak !== undefined) dbUpdates.longest_streak = updates.longestStreak;
+    if (updates.totalGoalsCompleted !== undefined) dbUpdates.total_goals_completed = updates.totalGoalsCompleted;
+    if (updates.badges !== undefined) dbUpdates.badges = updates.badges;
+    if (updates.lastActiveDate !== undefined) dbUpdates.last_active_date = updates.lastActiveDate;
+
+    const { error } = await supabase
+      .from('profiles')
+      .update(dbUpdates)
+      .eq('id', user.id);
+
+    if (error) {
+      throw new Error(error.message);
     }
+
+    setUser(prev => prev ? { ...prev, ...updates } : null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, updateProfile }}>
+    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

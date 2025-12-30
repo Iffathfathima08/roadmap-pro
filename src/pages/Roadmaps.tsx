@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useRoadmaps } from '@/hooks/useRoadmaps';
 import { useGoals } from '@/hooks/useGoals';
 import { MermaidEditor } from '@/components/roadmap/MermaidEditor';
-import { MermaidDiagram } from '@/components/roadmap/MermaidDiagram';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,25 +12,55 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Map, Trash2, Edit2 } from 'lucide-react';
+import { Plus, Map, Trash2, Edit2, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function Roadmaps() {
-  const { roadmaps, createRoadmap, updateMermaidCode, deleteRoadmap } = useRoadmaps();
+  const { roadmaps, createRoadmap, updateMermaidCode, deleteRoadmap, generateAIRoadmap, loading } = useRoadmaps();
   const { goals } = useGoals();
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedRoadmap, setSelectedRoadmap] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [creating, setCreating] = useState(false);
 
   const handleCreate = async () => {
     if (!title) return;
-    await createRoadmap(title, description, goals);
-    setTitle('');
-    setDescription('');
-    setCreateOpen(false);
+    
+    try {
+      setCreating(true);
+      
+      // Generate AI roadmap based on the title
+      const roadmapData = await generateAIRoadmap(title, description);
+      
+      await createRoadmap(
+        title,
+        description || roadmapData.description,
+        goals.map(g => g.id),
+        roadmapData.mermaidCode
+      );
+      
+      toast.success('Roadmap created with AI-generated steps!');
+      setTitle('');
+      setDescription('');
+      setCreateOpen(false);
+    } catch (error) {
+      console.error('Error creating roadmap:', error);
+      toast.error('Failed to create roadmap');
+    } finally {
+      setCreating(false);
+    }
   };
 
   const activeRoadmap = roadmaps.find(r => r.id === selectedRoadmap);
+
+  if (loading) {
+    return (
+      <div className="p-6 lg:p-8 max-w-7xl mx-auto flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
@@ -51,7 +80,7 @@ export default function Roadmaps() {
           <Map className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
           <h3 className="text-lg font-semibold mb-2">No roadmaps yet</h3>
           <p className="text-muted-foreground mb-4">
-            Create a roadmap from your goals to visualize your learning path
+            Add a goal to automatically generate a roadmap, or create one manually
           </p>
           <Button onClick={() => setCreateOpen(true)}>
             <Plus className="w-4 h-4 mr-2" />
@@ -132,31 +161,38 @@ export default function Roadmaps() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Title</Label>
+              <Label>What do you want to learn?</Label>
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="My Learning Path"
+                placeholder="e.g., Learn React, Master Python, Build a startup"
               />
             </div>
             <div className="space-y-2">
-              <Label>Description</Label>
+              <Label>Description (optional)</Label>
               <Textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="What's this roadmap about?"
+                placeholder="Any specific details about your learning goal?"
                 rows={3}
               />
             </div>
             <p className="text-sm text-muted-foreground">
-              This will create a roadmap from your {goals.length} current goals.
+              AI will generate a personalized step-by-step roadmap for you!
             </p>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setCreateOpen(false)}>
+              <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={creating}>
                 Cancel
               </Button>
-              <Button onClick={handleCreate} disabled={!title}>
-                Create
+              <Button onClick={handleCreate} disabled={!title || creating}>
+                {creating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  'Create'
+                )}
               </Button>
             </div>
           </div>
