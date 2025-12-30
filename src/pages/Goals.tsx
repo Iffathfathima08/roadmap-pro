@@ -1,14 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useGoals } from '@/hooks/useGoals';
+import { useRoadmaps } from '@/hooks/useRoadmaps';
 import { GoalCard } from '@/components/goals/GoalCard';
 import { GoalForm } from '@/components/goals/GoalForm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Goal } from '@/types';
 import { Plus, Search, Target } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function Goals() {
   const { goals, addGoal, updateGoal, deleteGoal, updateStatus } = useGoals();
+  const { roadmaps, createRoadmap, updateRoadmap, generateMermaidFromGoals } = useRoadmaps();
   const [formOpen, setFormOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
   const [search, setSearch] = useState('');
@@ -18,11 +21,39 @@ export default function Goals() {
     g.description.toLowerCase().includes(search.toLowerCase())
   );
 
+  // Auto-update roadmap when goals change
+  useEffect(() => {
+    if (goals.length > 0 && roadmaps.length > 0) {
+      const mainRoadmap = roadmaps.find(r => r.title === 'My Learning Journey');
+      if (mainRoadmap) {
+        const newMermaidCode = generateMermaidFromGoals(goals, 'My Learning Journey');
+        if (mainRoadmap.mermaidCode !== newMermaidCode) {
+          updateRoadmap(mainRoadmap.id, {
+            mermaidCode: newMermaidCode,
+            goalIds: goals.map(g => g.id),
+          });
+        }
+      }
+    }
+  }, [goals, roadmaps, generateMermaidFromGoals, updateRoadmap]);
+
   const handleSubmit = async (data: Omit<Goal, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
     if (editingGoal) {
       await updateGoal(editingGoal.id, data);
     } else {
-      await addGoal(data);
+      const newGoal = await addGoal(data);
+      
+      // Auto-create roadmap on first goal
+      if (goals.length === 0 && newGoal) {
+        await createRoadmap(
+          'My Learning Journey',
+          'Your personalized learning roadmap based on your goals',
+          [newGoal]
+        );
+        toast.success('🗺️ Your roadmap has been created!', {
+          description: 'Check the Roadmaps page to see your learning journey',
+        });
+      }
     }
     setEditingGoal(null);
   };
