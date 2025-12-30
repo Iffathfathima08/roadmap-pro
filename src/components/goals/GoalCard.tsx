@@ -1,4 +1,4 @@
-import { Goal, GoalStatus } from '@/types';
+import { Goal, GoalStatus } from '@/hooks/useGoals';
 import { Calendar, MoreVertical, CheckCircle2, Circle, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {

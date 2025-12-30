@@ -1,53 +1,137 @@
 import { useState, useEffect } from 'react';
-import { Goal, GoalStatus } from '@/types';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
-const GOALS_KEY = 'roadmap_goals';
+export type GoalStatus = 'not-started' | 'in-progress' | 'completed';
+
+export interface Goal {
+  id: string;
+  userId: string;
+  title: string;
+  description: string;
+  deadline: string;
+  status: GoalStatus;
+  roadmapId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export function useGoals() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (user) {
-      const stored = JSON.parse(localStorage.getItem(GOALS_KEY) || '[]');
-      setGoals(stored.filter((g: Goal) => g.userId === user.id));
-    } else {
+  const fetchGoals = async () => {
+    if (!session?.user?.id) {
       setGoals([]);
+      setLoading(false);
+      return;
     }
-    setLoading(false);
-  }, [user]);
 
-  const saveGoals = (newGoals: Goal[]) => {
-    const allGoals = JSON.parse(localStorage.getItem(GOALS_KEY) || '[]');
-    const otherGoals = allGoals.filter((g: Goal) => g.userId !== user?.id);
-    localStorage.setItem(GOALS_KEY, JSON.stringify([...otherGoals, ...newGoals]));
-    setGoals(newGoals);
+    const { data, error } = await supabase
+      .from('goals')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching goals:', error);
+      setLoading(false);
+      return;
+    }
+
+    const mappedGoals: Goal[] = (data || []).map(g => ({
+      id: g.id,
+      userId: g.user_id,
+      title: g.title,
+      description: g.description || '',
+      deadline: g.deadline || '',
+      status: (g.status as GoalStatus) || 'not-started',
+      roadmapId: g.roadmap_id || undefined,
+      createdAt: g.created_at,
+      updatedAt: g.updated_at,
+    }));
+
+    setGoals(mappedGoals);
+    setLoading(false);
   };
 
+  useEffect(() => {
+    fetchGoals();
+  }, [session?.user?.id]);
+
   const addGoal = async (goal: Omit<Goal, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
-    if (!user) return;
+    if (!session?.user?.id) return null;
+
+    const { data, error } = await supabase
+      .from('goals')
+      .insert({
+        user_id: session.user.id,
+        title: goal.title,
+        description: goal.description,
+        deadline: goal.deadline || null,
+        status: goal.status,
+        roadmap_id: goal.roadmapId || null,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error adding goal:', error);
+      throw new Error(error.message);
+    }
+
     const newGoal: Goal = {
-      ...goal,
-      id: crypto.randomUUID(),
-      userId: user.id,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      id: data.id,
+      userId: data.user_id,
+      title: data.title,
+      description: data.description || '',
+      deadline: data.deadline || '',
+      status: (data.status as GoalStatus) || 'not-started',
+      roadmapId: data.roadmap_id || undefined,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
     };
-    saveGoals([...goals, newGoal]);
+
+    setGoals(prev => [newGoal, ...prev]);
     return newGoal;
   };
 
   const updateGoal = async (id: string, updates: Partial<Goal>) => {
-    const updated = goals.map(g => 
+    const dbUpdates: Record<string, unknown> = {};
+    if (updates.title !== undefined) dbUpdates.title = updates.title;
+    if (updates.description !== undefined) dbUpdates.description = updates.description;
+    if (updates.deadline !== undefined) dbUpdates.deadline = updates.deadline || null;
+    if (updates.status !== undefined) dbUpdates.status = updates.status;
+    if (updates.roadmapId !== undefined) dbUpdates.roadmap_id = updates.roadmapId || null;
+
+    const { error } = await supabase
+      .from('goals')
+      .update(dbUpdates)
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error updating goal:', error);
+      throw new Error(error.message);
+    }
+
+    setGoals(prev => prev.map(g =>
       g.id === id ? { ...g, ...updates, updatedAt: new Date().toISOString() } : g
-    );
-    saveGoals(updated);
+    ));
   };
 
   const deleteGoal = async (id: string) => {
-    saveGoals(goals.filter(g => g.id !== id));
+    const { error } = await supabase
+      .from('goals')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error deleting goal:', error);
+      throw new Error(error.message);
+    }
+
+    setGoals(prev => prev.filter(g => g.id !== id));
   };
 
   const updateStatus = async (id: string, status: GoalStatus) => {
@@ -60,5 +144,5 @@ export function useGoals() {
     return Math.round((completed / goals.length) * 100);
   };
 
-  return { goals, loading, addGoal, updateGoal, deleteGoal, updateStatus, getProgress };
+  return { goals, loading, addGoal, updateGoal, deleteGoal, updateStatus, getProgress, refetch: fetchGoals };
 }
