@@ -14,7 +14,125 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      goals: {
+        Row: {
+          created_at: string | null
+          deadline: string | null
+          description: string | null
+          id: string
+          roadmap_id: string | null
+          status: string | null
+          title: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          deadline?: string | null
+          description?: string | null
+          id?: string
+          roadmap_id?: string | null
+          status?: string | null
+          title: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          deadline?: string | null
+          description?: string | null
+          id?: string
+          roadmap_id?: string | null
+          status?: string | null
+          title?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goals_roadmap_fk"
+            columns: ["roadmap_id"]
+            isOneToOne: false
+            referencedRelation: "roadmaps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          badges: string[] | null
+          created_at: string | null
+          current_streak: number | null
+          display_name: string | null
+          email: string | null
+          id: string
+          last_active_date: string | null
+          longest_streak: number | null
+          photo_url: string | null
+          total_goals_completed: number | null
+        }
+        Insert: {
+          badges?: string[] | null
+          created_at?: string | null
+          current_streak?: number | null
+          display_name?: string | null
+          email?: string | null
+          id: string
+          last_active_date?: string | null
+          longest_streak?: number | null
+          photo_url?: string | null
+          total_goals_completed?: number | null
+        }
+        Update: {
+          badges?: string[] | null
+          created_at?: string | null
+          current_streak?: number | null
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          last_active_date?: string | null
+          longest_streak?: number | null
+          photo_url?: string | null
+          total_goals_completed?: number | null
+        }
+        Relationships: []
+      }
+      roadmaps: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          goal_ids: string[] | null
+          id: string
+          mermaid_code: string | null
+          progress: number | null
+          title: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          goal_ids?: string[] | null
+          id?: string
+          mermaid_code?: string | null
+          progress?: number | null
+          title: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          goal_ids?: string[] | null
+          id?: string
+          mermaid_code?: string | null
+          progress?: number | null
+          title?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
