@@ -6,10 +6,12 @@ import {
   Bell, 
   User, 
   LogOut,
-  Flame
+  Flame,
+  Shield
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useUserRole } from '@/hooks/useUserRole';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -24,11 +26,12 @@ export function AppSidebar() {
   const location = useLocation();
   const { user, signOut } = useAuth();
   const { unreadCount } = useNotifications();
+  const { isAdmin } = useUserRole();
 
   return (
     <aside className="w-64 h-screen bg-card border-r border-border flex flex-col">
       <div className="p-6 border-b border-border">
-        <h1 className="text-xl font-bold gradient-text">RoadmapPro</h1>
+        <h1 className="text-xl font-bold font-display gradient-text">My Roadmap Pro</h1>
       </div>
 
       {user && (
@@ -76,6 +79,21 @@ export function AppSidebar() {
             </Link>
           );
         })}
+
+        {isAdmin && (
+          <Link
+            to="/admin"
+            className={cn(
+              'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors mt-4 border border-primary/20',
+              location.pathname.startsWith('/admin')
+                ? 'bg-primary text-primary-foreground'
+                : 'text-primary hover:bg-primary/10'
+            )}
+          >
+            <Shield className="w-5 h-5" />
+            <span className="font-medium">Admin Panel</span>
+          </Link>
+        )}
       </nav>
 
       <div className="p-4 border-t border-border">
