@@ -25,7 +25,7 @@ export default function Auth() {
     try {
       if (isSignUp) {
         await signUp(email, password, displayName);
-        toast({ title: 'Account created!', description: 'Welcome to RoadmapPro' });
+        toast({ title: 'Account created!', description: 'Welcome to My Roadmap Pro' });
       } else {
         await signIn(email, password);
         toast({ title: 'Welcome back!' });
@@ -47,9 +47,9 @@ export default function Auth() {
       <div className="hidden lg:flex lg:w-1/2 gradient-primary items-center justify-center p-12">
         <div className="text-center text-primary-foreground">
           <Map className="w-20 h-20 mx-auto mb-6" />
-          <h1 className="text-4xl font-bold mb-4">RoadmapPro</h1>
+          <h1 className="text-4xl font-bold font-display mb-4">My Roadmap Pro</h1>
           <p className="text-lg opacity-90 max-w-md">
-            Plan your learning journey, track your progress, and achieve your goals with visual roadmaps.
+            Plan your career journey with personalized learning roadmaps. Track progress and achieve your professional goals.
           </p>
         </div>
       </div>
@@ -58,7 +58,7 @@ export default function Auth() {
         <div className="w-full max-w-md">
           <div className="lg:hidden text-center mb-8">
             <Map className="w-12 h-12 mx-auto mb-2 text-primary" />
-            <h1 className="text-2xl font-bold gradient-text">RoadmapPro</h1>
+            <h1 className="text-2xl font-bold font-display gradient-text">My Roadmap Pro</h1>
           </div>
 
           <h2 className="text-2xl font-bold mb-2">

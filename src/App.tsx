@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
+import { AdminRoute } from "@/components/layout/AdminRoute";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Goals from "./pages/Goals";
@@ -13,6 +14,10 @@ import Roadmaps from "./pages/Roadmaps";
 import Notifications from "./pages/Notifications";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import ManageUsers from "./pages/admin/ManageUsers";
+import ManageRoadmaps from "./pages/admin/ManageRoadmaps";
+import AdminAnalytics from "./pages/admin/AdminAnalytics";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +43,12 @@ const App = () => (
               <Route path="/roadmaps" element={<Roadmaps />} />
               <Route path="/notifications" element={<Notifications />} />
               <Route path="/profile" element={<Profile />} />
+              <Route element={<AdminRoute />}>
+                <Route path="/admin" element={<AdminDashboard />} />
+                <Route path="/admin/users" element={<ManageUsers />} />
+                <Route path="/admin/roadmaps" element={<ManageRoadmaps />} />
+                <Route path="/admin/analytics" element={<AdminAnalytics />} />
+              </Route>
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
